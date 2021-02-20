@@ -15,9 +15,8 @@ internal class RetryFailedEvents(
     snowplowAppProperties: SnowplowAppProperties,
     private val retryCount: Int,
     private val successCallback: SuccessCallback? = null,
-    private val finalFailureCallback: FailureCallback? = null
+    private val finalFailureCallback: FailureCallback? = null,
 ) {
-//    private var retryAttemptCounter = retryCount
     private val retryAttemptCountDownLatch = CountDownLatch(retryCount)
 
     fun sendEvent(event: Event) {
@@ -25,9 +24,7 @@ internal class RetryFailedEvents(
         logger.info { "Retrying to send event : $event, attemptCount: $attemptCount" }
 
         val dispatcher = SnowplowDispatcher(retryTracker)
-        logger.info { "Created a valid dispatcher: ${dispatcher.hashCode()}" }
         dispatcher.send(event)
-
     }
 
     private val retryTracker: Tracker = with(snowplowAppProperties) {
@@ -36,7 +33,7 @@ internal class RetryFailedEvents(
             appId = appId,
             base64 = isBase64Encoded,
             emitter = emitter(collectorUrl = collectorUrl,
-                emitterSize = 1,
+                emitterSize = EMITTER_SIZE,
                 threadCount = emitterThreadCount,
                 onSuccess = successCallback,
                 onFailure = { successCount, failedEvents ->
@@ -50,15 +47,13 @@ internal class RetryFailedEvents(
         logger.info { "retryFailure: ${failedEvents.stream().map { event -> event.eventId }}" }
         val retryAttemptCounter = retryAttemptCountDownLatch.count.toInt()
         when {
-            retryAttemptCounter > 1 ->{
-                               CoroutineScope(Dispatchers.IO).launch {
-                val retrialDelay =  retryAttemptCounter.delay()
-            //    Thread.sleep(retrialDelay.toLong())
-                    delay(retrialDelay.toLong())
-                logger.info { "Retrying after $retrialDelay milliseconds" }
-                sendEvent(failedEvents.first())
-//                    failedEvents.forEach { sendEvent(it) }
+            retryAttemptCounter > 1 -> {
                 retryAttemptCountDownLatch.countDown()
+                CoroutineScope(Dispatchers.IO).launch {
+                    val retrialDelay = retryAttemptCounter.delay()
+                    delay(retrialDelay.toLong())
+                    logger.info { "Retrying after $retrialDelay milliseconds" }
+                    sendEvent(failedEvents.first())
                 }
             }
             else -> {
@@ -71,8 +66,9 @@ internal class RetryFailedEvents(
     private fun Int.delay() = INITIAL_DELAY * EXPONENTIAL_BASE.pow(retryCount - this + 1) + RANDOM_FACTOR
 
     companion object {
-        private const val INITIAL_DELAY = 300
+        private const val INITIAL_DELAY = 2000
         private const val EXPONENTIAL_BASE = 2.0
+        private const val EMITTER_SIZE = 1
         private val RANDOM_FACTOR = Random.nextInt(100, 500)
         private val logger = KotlinLogging.logger {}
     }
