@@ -2,6 +2,7 @@ package snowplowjavatrackertracker
 
 import com.snowplowanalytics.snowplow.tracker.Tracker
 import com.snowplowanalytics.snowplow.tracker.events.Event
+import java.util.concurrent.CountDownLatch
 import kotlin.math.pow
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
@@ -16,10 +17,11 @@ internal class RetryFailedEvents(
     private val successCallback: SuccessCallback? = null,
     private val finalFailureCallback: FailureCallback? = null
 ) {
-    private var retryAttemptCounter = retryCount
+//    private var retryAttemptCounter = retryCount
+    private val retryAttemptCountDownLatch = CountDownLatch(retryCount)
 
     fun sendEvent(event: Event) {
-        val attemptCount = retryCount - retryAttemptCounter + 1
+        val attemptCount = retryCount - retryAttemptCountDownLatch.count + 1
         logger.info { "Retrying to send event : $event, attemptCount: $attemptCount" }
 
         val dispatcher = SnowplowDispatcher(retryTracker)
@@ -37,10 +39,9 @@ internal class RetryFailedEvents(
                 emitterSize = 1,
                 threadCount = emitterThreadCount,
                 onSuccess = successCallback,
-                onFailure = finalFailureCallback
-//                { successCount, failedEvents ->
-//                    retryFailure(successCount, failedEvents)
-//                }
+                onFailure = { successCount, failedEvents ->
+                    retryFailure(successCount, failedEvents)
+                }
             )
         )
     }
@@ -48,15 +49,15 @@ internal class RetryFailedEvents(
     private fun retryFailure(successCount: Int, failedEvents: List<Event>) {
         logger.info { "retryFailure: ${failedEvents.stream().map { event -> event.eventId }}" }
         when {
-            retryAttemptCounter > 1 ->{
+            retryAttemptCountDownLatch.count > 1 ->{
                 //                CoroutineScope(Dispatchers.IO).launch {
-                val retrialDelay = retryAttemptCounter.delay()
+                val retrialDelay = 500
                 Thread.sleep(retrialDelay.toLong())
 //                    delay(retrialDelay.toLong())
                 logger.info { "Retrying after $retrialDelay milliseconds" }
                 sendEvent(failedEvents.first())
 //                    failedEvents.forEach { sendEvent(it) }
-                retryAttemptCounter--
+                retryAttemptCountDownLatch.countDown()
 //                }
             }
             else -> {
