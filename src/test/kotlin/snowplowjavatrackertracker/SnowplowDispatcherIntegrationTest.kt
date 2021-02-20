@@ -5,6 +5,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.TestInstance.Lifecycle
@@ -60,6 +61,7 @@ class SnowplowDispatcherIntegrationTest {
     }
 
     @Test
+    @Disabled
     fun `should call failure callback after failure with retry attempts`(){
         val dispatcher = snowplowDispatcher(
             appId = "my-app-id",

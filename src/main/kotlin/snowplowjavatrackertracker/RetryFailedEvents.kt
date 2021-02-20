@@ -48,17 +48,18 @@ internal class RetryFailedEvents(
 
     private fun retryFailure(successCount: Int, failedEvents: List<Event>) {
         logger.info { "retryFailure: ${failedEvents.stream().map { event -> event.eventId }}" }
+        val retryAttemptCounter = retryAttemptCountDownLatch.count.toInt()
         when {
-            retryAttemptCountDownLatch.count > 1 ->{
-                //                CoroutineScope(Dispatchers.IO).launch {
-                val retrialDelay = 500
-                Thread.sleep(retrialDelay.toLong())
-//                    delay(retrialDelay.toLong())
+            retryAttemptCounter > 1 ->{
+                               CoroutineScope(Dispatchers.IO).launch {
+                val retrialDelay =  retryAttemptCounter.delay()
+            //    Thread.sleep(retrialDelay.toLong())
+                    delay(retrialDelay.toLong())
                 logger.info { "Retrying after $retrialDelay milliseconds" }
                 sendEvent(failedEvents.first())
 //                    failedEvents.forEach { sendEvent(it) }
                 retryAttemptCountDownLatch.countDown()
-//                }
+                }
             }
             else -> {
                 logger.error { "Retrial attempts failed for events: $failedEvents" }
